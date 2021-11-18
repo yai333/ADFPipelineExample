@@ -1,0 +1,377 @@
+{
+    "$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "factoryName": {
+            "type": "string",
+            "metadata": "Data Factory name",
+            "defaultValue": "demotopscope"
+        },
+        "Office365_servicePrincipalKey": {
+            "type": "secureString",
+            "metadata": "Secure string for 'servicePrincipalKey' of 'Office365'"
+        },
+        "AzureBlobStorage1_servicePrincipalKey": {
+            "type": "secureString",
+            "metadata": "Secure string for 'servicePrincipalKey' of 'AzureBlobStorage1'"
+        },
+        "Office365_properties_typeProperties_servicePrincipalId": {
+            "type": "string",
+            "defaultValue": ""
+        },
+        "AzureBlobStorage1_properties_typeProperties_serviceEndpoint": {
+            "type": "string",
+            "defaultValue": ""
+        },
+        "AzureBlobStorage1_properties_typeProperties_tenant": {
+            "type": "string",
+            "defaultValue": ""
+        },
+        "AzureBlobStorage1_properties_typeProperties_servicePrincipalId": {
+            "type": "string",
+            "defaultValue": ""
+        },
+        "Office365TenantId": {
+            "type": "string",
+            "defaultValue": ""
+        },
+        "ServicePrincipalTenantId": {
+            "type": "string",
+            "defaultValue": ""
+        },
+        "DatabricksDomain": {
+            "type": "string",
+            "defaultValue": ""
+        },
+        "WorkspaceResourceId":{
+            "type": "string",
+            "defaultValue": ""
+        }
+    },
+    "variables": {
+        "factoryId": "[concat('Microsoft.DataFactory/factories/', parameters('factoryName'))]"
+    },
+    "resources": [
+        {
+            "name": "[concat(parameters('factoryName'), '/pipeline1')]",
+            "type": "Microsoft.DataFactory/factories/pipelines",
+            "apiVersion": "2018-06-01",
+            "properties": {
+                "activities": [
+                    {
+                        "name": "ExtractCalendarView",
+                        "description": "Get the occurrences, exceptions of events in a calendar view defined by a time range",
+                        "type": "Copy",
+                        "dependsOn": [
+                            {
+                                "activity": "SetGlobalVariable",
+                                "dependencyConditions": [
+                                    "Succeeded"
+                                ]
+                            }
+                        ],
+                        "policy": {
+                            "timeout": "7.00:00:00",
+                            "retry": 0,
+                            "retryIntervalInSeconds": 30,
+                            "secureOutput": false,
+                            "secureInput": false
+                        },
+                        "userProperties": [],
+                        "typeProperties": {
+                            "source": {
+                                "type": "Office365Source",
+                                "startTime": {
+                                    "value": "@utcnow()",
+                                    "type": "Expression"
+                                },
+                                "endTime": {
+                                    "value": "@adddays(utcnow(), 3)",
+                                    "type": "Expression"
+                                },
+                                "userScopeFilterUri": "",
+                                "outputColumns": [
+                                    {
+                                        "name": "id"
+                                    },
+                                    {
+                                        "name": "createdDateTime"
+                                    },
+                                    {
+                                        "name": "lastModifiedDateTime"
+                                    },
+                                    {
+                                        "name": "originalStartTimeZone"
+                                    },
+                                    {
+                                        "name": "originalEndTimeZone"
+                                    },
+                                    {
+                                        "name": "iCalUId"
+                                    },
+                                    {
+                                        "name": "start"
+                                    },
+                                    {
+                                        "name": "end"
+                                    },
+                                    {
+                                        "name": "location"
+                                    },
+                                    {
+                                        "name": "isAllDay"
+                                    },
+                                    {
+                                        "name": "isCancelled"
+                                    },
+                                    {
+                                        "name": "recurrence"
+                                    },
+                                    {
+                                        "name": "transactionId"
+                                    },
+                                    {
+                                        "name": "attendees"
+                                    },
+                                    {
+                                        "name": "organizer"
+                                    },
+                                    {
+                                        "name": "originalStart"
+                                    }
+                                ]
+                            },
+                            "sink": {
+                                "type": "BinarySink",
+                                "storeSettings": {
+                                    "type": "AzureBlobStorageWriteSettings"
+                                }
+                            },
+                            "enableStaging": false
+                        },
+                        "inputs": [
+                            {
+                                "referenceName": "Office365Table1",
+                                "type": "DatasetReference",
+                                "parameters": {}
+                            }
+                        ],
+                        "outputs": [
+                            {
+                                "referenceName": "Binary1",
+                                "type": "DatasetReference",
+                                "parameters": {
+                                    "outputPath": {
+                                        "value": "@variables('outputPath')",
+                                        "type": "Expression"
+                                    }
+                                }
+                            }
+                        ]
+                    },
+                    {
+                        "name": "LoadToS3",
+                        "description": "Load Calendar view change feed to AWS S3",
+                        "type": "DatabricksNotebook",
+                        "dependsOn": [
+                            {
+                                "activity": "ExtractCalendarView",
+                                "dependencyConditions": [
+                                    "Succeeded"
+                                ]
+                            }
+                        ],
+                        "policy": {
+                            "timeout": "7.00:00:00",
+                            "retry": 0,
+                            "retryIntervalInSeconds": 30,
+                            "secureOutput": false,
+                            "secureInput": false
+                        },
+                        "userProperties": [],
+                        "typeProperties": {
+                            "notebookPath": "/Users/support@topscope.com.au/Office365ETL",
+                            "baseParameters": {
+                                "inputPath": {
+                                    "value": "@variables('outputPath')",
+                                    "type": "Expression"
+                                }
+                            }
+                        },
+                        "linkedServiceName": {
+                            "referenceName": "databricksLinkedService",
+                            "type": "LinkedServiceReference"
+                        }
+                    },
+                    {
+                        "name": "SetGlobalVariable",
+                        "type": "SetVariable",
+                        "dependsOn": [],
+                        "userProperties": [],
+                        "typeProperties": {
+                            "variableName": "outputPath",
+                            "value": {
+                                "value": "@formatDateTime(utcNow(), 'yyyy/MM/dd/HH-mm')",
+                                "type": "Expression"
+                            }
+                        }
+                    },
+                    {
+                        "name": "ETLFailActivity",
+                        "type": "Fail",
+                        "dependsOn": [
+                            {
+                                "activity": "ExtractCalendarView",
+                                "dependencyConditions": [
+                                    "Failed"
+                                ]
+                            },
+                            {
+                                "activity": "LoadToS3",
+                                "dependencyConditions": [
+                                    "Failed"
+                                ]
+                            }
+                        ],
+                        "userProperties": [],
+                        "typeProperties": {
+                            "message": {
+                                "value": "Pipeline @pipeline().RunId has failed.",
+                                "type": "Expression"
+                            },
+                            "errorCode": "500"
+                        }
+                    }
+                ],
+                "policy": {
+                    "elapsedTimeMetric": {},
+                    "cancelAfter": {}
+                },
+                "variables": {
+                    "outputPath": {
+                        "type": "String"
+                    }
+                },
+                "annotations": [],
+                "lastPublishTime": "2021-10-01T13:14:57Z"
+            },
+            "dependsOn": [
+                "[concat(variables('factoryId'), '/datasets/Office365Table1')]",
+                "[concat(variables('factoryId'), '/datasets/Binary1')]",
+                "[concat(variables('factoryId'), '/linkedServices/databricksLinkedService')]"
+            ]
+        },
+        {
+            "name": "[concat(parameters('factoryName'), '/Binary1')]",
+            "type": "Microsoft.DataFactory/factories/datasets",
+            "apiVersion": "2018-06-01",
+            "properties": {
+                "linkedServiceName": {
+                    "referenceName": "AzureBlobStorage1",
+                    "type": "LinkedServiceReference"
+                },
+                "parameters": {
+                    "outputPath": {
+                        "type": "string"
+                    }
+                },
+                "annotations": [],
+                "type": "Binary",
+                "typeProperties": {
+                    "location": {
+                        "type": "AzureBlobStorageLocation",
+                        "folderPath": {
+                            "value": "@dataset().outputPath",
+                            "type": "Expression"
+                        },
+                        "container": "demo"
+                    }
+                }
+            },
+            "dependsOn": [
+                "[concat(variables('factoryId'), '/linkedServices/AzureBlobStorage1')]"
+            ]
+        },
+        {
+            "name": "[concat(parameters('factoryName'), '/Office365Table1')]",
+            "type": "Microsoft.DataFactory/factories/datasets",
+            "apiVersion": "2018-06-01",
+            "properties": {
+                "linkedServiceName": {
+                    "referenceName": "Office365",
+                    "type": "LinkedServiceReference"
+                },
+                "annotations": [],
+                "type": "Office365Table",
+                "schema": [],
+                "typeProperties": {
+                    "tableName": "BasicDataSet_v0.CalendarView_v0"
+                }
+            },
+            "dependsOn": [
+                "[concat(variables('factoryId'), '/linkedServices/Office365')]"
+            ]
+        },
+        {
+            "name": "[concat(parameters('factoryName'), '/Office365')]",
+            "type": "Microsoft.DataFactory/factories/linkedServices",
+            "apiVersion": "2018-06-01",
+            "properties": {
+                "annotations": [],
+                "type": "Office365",
+                "typeProperties": {
+                    "office365TenantId": "[parameters('Office365TenantId')]",
+                    "servicePrincipalTenantId": "[parameters('servicePrincipalTenantId')]",
+                    "servicePrincipalId": "[parameters('Office365_properties_typeProperties_servicePrincipalId')]",
+                    "servicePrincipalKey": {
+                        "type": "SecureString",
+                        "value": "[parameters('Office365_servicePrincipalKey')]"
+                    }
+                }
+            },
+            "dependsOn": []
+        },
+        {
+            "name": "[concat(parameters('factoryName'), '/AzureBlobStorage1')]",
+            "type": "Microsoft.DataFactory/factories/linkedServices",
+            "apiVersion": "2018-06-01",
+            "properties": {
+                "annotations": [],
+                "type": "AzureBlobStorage",
+                "typeProperties": {
+                    "serviceEndpoint": "[parameters('AzureBlobStorage1_properties_typeProperties_serviceEndpoint')]",
+                    "tenant": "[parameters('AzureBlobStorage1_properties_typeProperties_tenant')]",
+                    "servicePrincipalId": "[parameters('AzureBlobStorage1_properties_typeProperties_servicePrincipalId')]",
+                    "servicePrincipalKey": {
+                        "type": "SecureString",
+                        "value": "[parameters('AzureBlobStorage1_servicePrincipalKey')]"
+                    },
+                    "accountKind": "StorageV2"
+                }
+            },
+            "dependsOn": []
+        },
+        {
+            "name": "[concat(parameters('factoryName'), '/databricksLinkedService')]",
+            "type": "Microsoft.DataFactory/factories/linkedServices",
+            "apiVersion": "2018-06-01",
+            "properties": {
+                "annotations": [],
+                "type": "AzureDatabricks",
+                "typeProperties": {
+                    "domain": "[parameters('DatabricksDomain')]",
+                    "authentication": "MSI",
+                    "workspaceResourceId": "[parameters('WorkspaceResourceId')]",
+                    "newClusterNodeType": "Standard_DS3_v2",
+                    "newClusterNumOfWorker": "1",
+                    "newClusterSparkEnvVars": {
+                        "PYSPARK_PYTHON": "/databricks/python3/bin/python3"
+                    },
+                    "newClusterVersion": "10.0.x-scala2.12",
+                    "newClusterInitScripts": []
+                }
+            },
+            "dependsOn": []
+        }
+    ]
+}
